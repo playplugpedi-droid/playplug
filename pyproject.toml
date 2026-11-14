@@ -1,0 +1,23 @@
+[project]
+name = "social-publisher"
+version = "0.1.0"
+description = "Publish videos to YouTube, TikTok, Facebook, and Instagram from the command line"
+requires-python = ">=3.10"
+dependencies = [
+    "requests>=2.31",
+    "python-dotenv>=1.0",
+    "google-api-python-client>=2.100",
+    "google-auth>=2.23",
+    "google-auth-oauthlib>=1.1",
+    "google-auth-httplib2>=0.1",
+]
+
+[project.scripts]
+social-publisher = "social_publisher.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["social_publisher*"]

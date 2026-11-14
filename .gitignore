@@ -7,3 +7,8 @@ tokens/*.json
 *.egg-info/
 dist/
 build/
+
+# crosspost local files
+crosspost/state.json
+crosspost/config.json
+crosspost/downloads/

@@ -16,7 +16,8 @@ class FacebookPublisher(PlatformPublisher):
     def is_configured(self) -> bool:
         return bool(config.env("FACEBOOK_PAGE_ID")) and bool(config.env("FACEBOOK_PAGE_TOKEN"))
 
-    def _auth_headers(self) -> dict:
+    def _token(self) -> dict:
+        # Graph API takes the token as a request parameter (not a header named access_token).
         return {"access_token": config.env("FACEBOOK_PAGE_TOKEN")}
 
     def auth(self) -> None:
@@ -33,12 +34,11 @@ class FacebookPublisher(PlatformPublisher):
             file_size = video_path.stat().st_size
             start = requests.post(
                 f"{GRAPH}/{page_id}/videos",
-                params={
+                data={
+                    **self._token(),
                     "upload_phase": "start",
                     "file_size": file_size,
-                    "description": f"{meta.title}\n\n{meta.description}".strip(),
                 },
-                headers=self._auth_headers(),
                 timeout=30,
             )
             start.raise_for_status()
@@ -51,14 +51,13 @@ class FacebookPublisher(PlatformPublisher):
                     chunk = f.read(CHUNK_SIZE)
                     transfer = requests.post(
                         f"{GRAPH}/{page_id}/videos",
-                        params={
+                        data={
+                            **self._token(),
                             "upload_phase": "transfer",
                             "upload_session_id": session_id,
                             "start_offset": offset,
-                            "end_offset": offset + len(chunk),
                         },
-                        data=chunk,
-                        headers={**self._auth_headers(), "Content-Type": "multipart/form-data"},
+                        files={"video_file_chunk": ("chunk.bin", chunk)},
                         timeout=600,
                     )
                     transfer.raise_for_status()
@@ -68,11 +67,13 @@ class FacebookPublisher(PlatformPublisher):
                     offset = next_offset
             finish = requests.post(
                 f"{GRAPH}/{page_id}/videos",
-                params={
+                data={
+                    **self._token(),
                     "upload_phase": "finish",
                     "upload_session_id": session_id,
+                    "description": f"{meta.title}\n\n{meta.description}".strip(),
+                    "title": meta.title[:255],
                 },
-                headers=self._auth_headers(),
                 timeout=30,
             )
             finish.raise_for_status()

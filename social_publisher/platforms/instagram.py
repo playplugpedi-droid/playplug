@@ -16,7 +16,7 @@ class InstagramPublisher(PlatformPublisher):
     def is_configured(self) -> bool:
         return bool(config.env("INSTAGRAM_USER_ID")) and bool(config.env("INSTAGRAM_ACCESS_TOKEN"))
 
-    def _auth_headers(self) -> dict:
+    def _token(self) -> dict:
         return {"access_token": config.env("INSTAGRAM_ACCESS_TOKEN")}
 
     def auth(self) -> None:
@@ -42,11 +42,11 @@ class InstagramPublisher(PlatformPublisher):
             create = requests.post(
                 f"{GRAPH}/{ig_user_id}/media",
                 data={
+                    **self._token(),
                     "media_type": "REELS",
                     "video_url": meta.ig_video_url,
                     "caption": caption,
                 },
-                headers=self._auth_headers(),
                 timeout=60,
             )
             create.raise_for_status()
@@ -54,8 +54,7 @@ class InstagramPublisher(PlatformPublisher):
             for _ in range(60):
                 status = requests.get(
                     f"{GRAPH}/{creation_id}",
-                    params={"fields": "status_code"},
-                    headers=self._auth_headers(),
+                    params={**self._token(), "fields": "status_code"},
                     timeout=30,
                 )
                 status.raise_for_status()
@@ -77,17 +76,22 @@ class InstagramPublisher(PlatformPublisher):
                 )
             publish = requests.post(
                 f"{GRAPH}/{ig_user_id}/media_publish",
-                data={"creation_id": creation_id},
-                headers=self._auth_headers(),
+                data={**self._token(), "creation_id": creation_id},
                 timeout=30,
             )
             publish.raise_for_status()
             media_id = publish.json()["id"]
+            url = f"https://www.instagram.com/reel/{media_id}/"
+            try:
+                pl = requests.get(f"{GRAPH}/{media_id}", params={**self._token(), "fields": "permalink"}, timeout=30)
+                url = pl.json().get("permalink") or url
+            except Exception:
+                pass
             return PublishResult(
                 platform=self.name,
                 ok=True,
                 video_id=media_id,
-                url=f"https://www.instagram.com/reel/{media_id}/",
+                url=url,
             )
         except Exception as exc:
             return PublishResult(platform=self.name, ok=False, error=str(exc))

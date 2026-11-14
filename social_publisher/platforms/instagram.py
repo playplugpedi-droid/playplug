@@ -16,8 +16,8 @@ class InstagramPublisher(PlatformPublisher):
     def is_configured(self) -> bool:
         return bool(config.env("INSTAGRAM_USER_ID")) and bool(config.env("INSTAGRAM_ACCESS_TOKEN"))
 
-    def _auth_headers(self) -> dict:
-        return {"access_token": config.env("INSTAGRAM_ACCESS_TOKEN")}
+    def _token(self) -> str:
+        return config.env("INSTAGRAM_ACCESS_TOKEN")
 
     def auth(self) -> None:
         raise SystemExit(
@@ -38,15 +38,16 @@ class InstagramPublisher(PlatformPublisher):
             )
         try:
             ig_user_id = config.env("INSTAGRAM_USER_ID")
+            token = self._token()
             caption = f"{meta.title}\n\n{meta.description}".strip()
             create = requests.post(
                 f"{GRAPH}/{ig_user_id}/media",
                 data={
+                    "access_token": token,
                     "media_type": "REELS",
                     "video_url": meta.ig_video_url,
                     "caption": caption,
                 },
-                headers=self._auth_headers(),
                 timeout=60,
             )
             create.raise_for_status()
@@ -54,8 +55,7 @@ class InstagramPublisher(PlatformPublisher):
             for _ in range(60):
                 status = requests.get(
                     f"{GRAPH}/{creation_id}",
-                    params={"fields": "status_code"},
-                    headers=self._auth_headers(),
+                    params={"fields": "status_code", "access_token": token},
                     timeout=30,
                 )
                 status.raise_for_status()
@@ -77,8 +77,7 @@ class InstagramPublisher(PlatformPublisher):
                 )
             publish = requests.post(
                 f"{GRAPH}/{ig_user_id}/media_publish",
-                data={"creation_id": creation_id},
-                headers=self._auth_headers(),
+                data={"access_token": token, "creation_id": creation_id},
                 timeout=30,
             )
             publish.raise_for_status()

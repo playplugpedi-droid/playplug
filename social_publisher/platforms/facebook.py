@@ -16,8 +16,8 @@ class FacebookPublisher(PlatformPublisher):
     def is_configured(self) -> bool:
         return bool(config.env("FACEBOOK_PAGE_ID")) and bool(config.env("FACEBOOK_PAGE_TOKEN"))
 
-    def _auth_headers(self) -> dict:
-        return {"access_token": config.env("FACEBOOK_PAGE_TOKEN")}
+    def _token(self) -> str:
+        return config.env("FACEBOOK_PAGE_TOKEN")
 
     def auth(self) -> None:
         raise SystemExit(
@@ -30,15 +30,16 @@ class FacebookPublisher(PlatformPublisher):
     def publish(self, video_path: Path, meta: VideoMeta) -> PublishResult:
         try:
             page_id = config.env("FACEBOOK_PAGE_ID")
+            token = self._token()
             file_size = video_path.stat().st_size
             start = requests.post(
                 f"{GRAPH}/{page_id}/videos",
-                params={
+                data={
+                    "access_token": token,
                     "upload_phase": "start",
                     "file_size": file_size,
                     "description": f"{meta.title}\n\n{meta.description}".strip(),
                 },
-                headers=self._auth_headers(),
                 timeout=30,
             )
             start.raise_for_status()
@@ -51,14 +52,14 @@ class FacebookPublisher(PlatformPublisher):
                     chunk = f.read(CHUNK_SIZE)
                     transfer = requests.post(
                         f"{GRAPH}/{page_id}/videos",
-                        params={
-                            "upload_phase": "transfer",
-                            "upload_session_id": session_id,
-                            "start_offset": offset,
-                            "end_offset": offset + len(chunk),
+                        files={
+                            "access_token": (None, token),
+                            "upload_phase": (None, "transfer"),
+                            "upload_session_id": (None, session_id),
+                            "start_offset": (None, str(offset)),
+                            "end_offset": (None, str(offset + len(chunk))),
+                            "file_chunk": ("chunk", chunk, "application/octet-stream"),
                         },
-                        data=chunk,
-                        headers={**self._auth_headers(), "Content-Type": "multipart/form-data"},
                         timeout=600,
                     )
                     transfer.raise_for_status()
@@ -68,11 +69,11 @@ class FacebookPublisher(PlatformPublisher):
                     offset = next_offset
             finish = requests.post(
                 f"{GRAPH}/{page_id}/videos",
-                params={
+                data={
+                    "access_token": token,
                     "upload_phase": "finish",
                     "upload_session_id": session_id,
                 },
-                headers=self._auth_headers(),
                 timeout=30,
             )
             finish.raise_for_status()

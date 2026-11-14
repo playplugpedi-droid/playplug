@@ -18,32 +18,69 @@ class TikTokPublisher(PlatformPublisher):
     def is_configured(self) -> bool:
         return bool(config.env("TIKTOK_CLIENT_KEY")) and bool(config.env("TIKTOK_CLIENT_SECRET"))
 
-    def _access_token(self) -> str:
-        token = config.load_token(self.name) or {}
-        if token.get("expires_at", 0) > time.time() + 60 and token.get("access_token"):
-            return token["access_token"]
+    def _store(self, data: dict) -> str:
+        if not data.get("access_token"):
+            raise RuntimeError(f"TikTok did not return a token: {data}")
+        config.save_token(
+            self.name,
+            {
+                "access_token": data["access_token"],
+                "refresh_token": data.get("refresh_token", ""),
+                "expires_at": time.time() + int(data.get("expires_in", 86400)),
+            },
+        )
+        return data["access_token"]
+
+    def _token_request(self, extra: dict) -> dict:
         response = requests.post(
             f"{API_BASE}/oauth/token/",
             data={
                 "client_key": config.env("TIKTOK_CLIENT_KEY"),
                 "client_secret": config.env("TIKTOK_CLIENT_SECRET"),
-                "grant_type": "client_credentials",
+                **extra,
             },
             timeout=30,
         )
         response.raise_for_status()
-        data = response.json().get("data", {})
-        config.save_token(
-            self.name,
-            {
-                "access_token": data.get("access_token", ""),
-                "expires_at": time.time() + int(data.get("expires_in", 7200)),
-            },
+        return response.json()
+
+    def _access_token(self) -> str:
+        """User access token (Content Posting needs the account owner's authorization, video.publish scope)."""
+        token = config.load_token(self.name) or {}
+        if token.get("expires_at", 0) > time.time() + 60 and token.get("access_token"):
+            return token["access_token"]
+        refresh = token.get("refresh_token") or config.env("TIKTOK_REFRESH_TOKEN")
+        if not refresh:
+            raise RuntimeError("TikTok is not authorized yet. Run: social-publisher auth tiktok")
+        return self._store(
+            self._token_request({"grant_type": "refresh_token", "refresh_token": refresh})
         )
-        return data["access_token"]
 
     def auth(self) -> None:
-        self._access_token()
+        """Authorization-code flow: open the URL, approve, paste the `code` from the redirect URL."""
+        import urllib.parse
+
+        redirect = config.env("TIKTOK_REDIRECT_URI")
+        if not redirect:
+            raise SystemExit("Set TIKTOK_REDIRECT_URI in .env (must match the redirect URI registered in your TikTok app).")
+        query = urllib.parse.urlencode(
+            {
+                "client_key": config.env("TIKTOK_CLIENT_KEY"),
+                "response_type": "code",
+                "scope": "user.info.basic,video.publish",
+                "redirect_uri": redirect,
+                "state": "social-publisher",
+            }
+        )
+        print("Open this URL, log in as the TikTok account owner and approve:")
+        print(f"https://www.tiktok.com/v2/auth/authorize/?{query}")
+        code = urllib.parse.unquote(input("Paste the 'code' value from the redirect URL: ").strip())
+        self._store(
+            self._token_request(
+                {"grant_type": "authorization_code", "code": code, "redirect_uri": redirect}
+            )
+        )
+        print("TikTok authorized.")
 
     def publish(self, video_path: Path, meta: VideoMeta) -> PublishResult:
         try:

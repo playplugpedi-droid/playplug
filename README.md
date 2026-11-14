@@ -53,8 +53,10 @@ Exit code is `0` if every requested platform succeeded, `1` otherwise — handy 
 ### TikTok
 1. [TikTok for Developers](https://developers.tiktok.com) → create an app.
 2. Add the **Content Posting API** product.
-3. Copy the client key and secret into `.env`, then run `social-publisher auth tiktok`.
-4. **Important:** until TikTok audits your app, posts are limited to **self-only (private)** visibility. After audit approval, public posting works.
+3. In the app settings, register the redirect URI `http://localhost:8080/`.
+4. Copy the client key and secret into `.env`, then run `social-publisher auth tiktok`.
+5. Posting requires a **user** access token with the `video.publish` scope — the `auth` command runs the OAuth authorization-code flow in your browser (with a local callback server on port 8080) and stores the token, refreshing it automatically when it expires.
+6. **Important:** until TikTok audits your app, posts are limited to **self-only (private)** visibility. After audit approval, public posting works.
 
 ### Facebook (Pages only)
 The Graph API can only post to **Pages**, not personal profiles.
@@ -91,7 +93,7 @@ social_publisher/
 └── platforms/
     ├── base.py          # PlatformPublisher interface
     ├── youtube.py       # OAuth + resumable upload (YouTube Data API v3)
-    ├── tiktok.py        # client-credentials token + chunked upload (Content Posting API)
+    ├── tiktok.py        # user OAuth (auth code) + chunked upload (Content Posting API)
     ├── facebook.py      # Page token + resumable video upload (Graph API)
     └── instagram.py     # media container + publish flow (Graph API)
 ```

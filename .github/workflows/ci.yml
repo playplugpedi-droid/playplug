@@ -29,7 +29,7 @@ jobs:
             echo "expected failure for missing video file"
             exit 1
           fi
-          social-publisher publish /nonexistent.mp4 --platforms linkedin 2>&1 | grep -q "Unknown platform"
+          social-publisher publish /tmp/test.mp4 --platforms linkedin 2>&1 | grep -q "Unknown platform"
           out=$(social-publisher publish /tmp/test.mp4 --platforms youtube,tiktok,facebook,instagram 2>&1)
           rc=$?
           echo "$out"

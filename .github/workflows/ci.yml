@@ -30,8 +30,8 @@ jobs:
             exit 1
           fi
           social-publisher publish /tmp/test.mp4 --platforms linkedin 2>&1 | grep -q "Unknown platform"
-          out=$(social-publisher publish /tmp/test.mp4 --platforms youtube,tiktok,facebook,instagram 2>&1)
-          rc=$?
+          rc=0
+          out=$(social-publisher publish /tmp/test.mp4 --platforms youtube,tiktok,facebook,instagram 2>&1) || rc=$?
           echo "$out"
           if [ "$rc" -ne 1 ] || ! echo "$out" | grep -q "no configured platforms"; then
             echo "expected exit 1 with 'no configured platforms'"
